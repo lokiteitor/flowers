@@ -3,12 +3,84 @@ import { mulberry32, valueNoise } from '../util/random.js';
 import { getTextures } from './textures.js';
 import { footprint } from './blocks.js';
 import { WORLD_HALF, HILLS_HALF, PATH } from './layout.js';
+import { RIVER_HALF, RIVER_BED, riverDistance, isRiverCell } from './river.js';
 
 function hillHeight(ix, iz) {
   const d = Math.max(Math.abs(ix + 0.5), Math.abs(iz + 0.5)) - WORLD_HALF;
   if (d < 0) return 0;
+  // El río abre un valle entre las colinas: llano junto al agua y subiendo poco a poco.
+  const bank = riverDistance(ix + 0.5, iz + 0.5) - RIVER_HALF - 1.5;
+  if (bank < 0) return 0;
   const rough = valueNoise(ix * 0.13, iz * 0.13, 7) * 5 * Math.min(1, d / 5);
-  return Math.max(1, Math.floor(1 + d * 0.45 + rough));
+  const height = Math.max(1, Math.floor(1 + d * 0.45 + rough));
+  return Math.min(height, 1 + Math.floor(bank * 0.8));
+}
+
+// Acumula cuadrados sueltos (uno por cara de bloque) en una sola geometría.
+class QuadBatch {
+  positions = [];
+  normals = [];
+  uvs = [];
+  indices = [];
+
+  // Esquinas en sentido antihorario vistas desde fuera.
+  add(corners, normal) {
+    const base = this.positions.length / 3;
+    for (const c of corners) {
+      this.positions.push(...c);
+      this.normals.push(...normal);
+    }
+    this.uvs.push(0, 0, 1, 0, 1, 1, 0, 1);
+    this.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+  }
+
+  top(ix, iz, y) {
+    this.add([[ix, y, iz + 1], [ix + 1, y, iz + 1], [ix + 1, y, iz], [ix, y, iz]], [0, 1, 0]);
+  }
+
+  toMesh(material) {
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.Float32BufferAttribute(this.positions, 3));
+    geometry.setAttribute('normal', new THREE.Float32BufferAttribute(this.normals, 3));
+    geometry.setAttribute('uv', new THREE.Float32BufferAttribute(this.uvs, 2));
+    geometry.setIndex(this.indices);
+    return new THREE.Mesh(geometry, material);
+  }
+}
+
+// Suelo por celdas: hierba, camino y el cauce del río excavado un bloque, con sus orillas de tierra.
+function buildGround(tex) {
+  const grass = new QuadBatch();
+  const path = new QuadBatch();
+  const bed = new QuadBatch();
+  const banks = new QuadBatch();
+  const y0 = RIVER_BED;
+
+  for (let ix = -HILLS_HALF; ix < HILLS_HALF; ix++) {
+    for (let iz = -HILLS_HALF; iz < HILLS_HALF; iz++) {
+      if (hillHeight(ix, iz) > 0) continue;
+      if (!isRiverCell(ix, iz)) {
+        const onPath = Math.abs(ix + 0.5) < PATH.halfWidth && iz >= PATH.zStart && iz < PATH.zEnd;
+        (onPath ? path : grass).top(ix, iz, 0);
+        continue;
+      }
+      bed.top(ix, iz, y0);
+      // Paredes de tierra hacia cada vecino que no sea río, mirando al agua.
+      if (!isRiverCell(ix + 1, iz)) banks.add([[ix + 1, y0, iz], [ix + 1, y0, iz + 1], [ix + 1, 0, iz + 1], [ix + 1, 0, iz]], [-1, 0, 0]);
+      if (!isRiverCell(ix - 1, iz)) banks.add([[ix, y0, iz + 1], [ix, y0, iz], [ix, 0, iz], [ix, 0, iz + 1]], [1, 0, 0]);
+      if (!isRiverCell(ix, iz + 1)) banks.add([[ix + 1, y0, iz + 1], [ix, y0, iz + 1], [ix, 0, iz + 1], [ix + 1, 0, iz + 1]], [0, 0, -1]);
+      if (!isRiverCell(ix, iz - 1)) banks.add([[ix, y0, iz], [ix + 1, y0, iz], [ix + 1, 0, iz], [ix, 0, iz]], [0, 0, 1]);
+    }
+  }
+
+  const group = new THREE.Group();
+  group.add(
+    grass.toMesh(new THREE.MeshLambertMaterial({ map: tex.grassTop })),
+    path.toMesh(new THREE.MeshLambertMaterial({ map: tex.path })),
+    bed.toMesh(new THREE.MeshLambertMaterial({ map: tex.sand })),
+    banks.toMesh(new THREE.MeshLambertMaterial({ map: tex.dirt })),
+  );
+  return group;
 }
 
 function instancedBlocks(positions, material) {
@@ -71,15 +143,16 @@ function buildMangoes(fruits, tex, rng) {
 // colgando por debajo. Dos van fijos junto a la casita; el resto, repartidos por el campo.
 function buildMangoTrees(tex, rng) {
   const spots = [
-    { x: -12.5, z: 7.5, height: 5 },
-    { x: 13.5, z: -4.5, height: 4 },
+    { x: -15.5, z: 3.5, height: 5 },
+    { x: 15.5, z: -7.5, height: 4 },
   ];
   let attempts = 0;
   while (spots.length < 11 && attempts++ < 400) {
     const x = Math.round((rng() * 2 - 1) * 41) + 0.5;
     const z = Math.round((rng() * 2 - 1) * 41) + 0.5;
-    if (Math.hypot(x, z) < 22) continue;
+    if (Math.hypot(x, z) < 24) continue;
     if (z > 0 && Math.abs(x) < 7) continue; // no tapar la vista del camino
+    if (riverDistance(x, z) < RIVER_HALF + 5) continue; // ni crecer dentro del río
     if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 12)) continue;
     spots.push({ x, z, height: 4 + Math.floor(rng() * 2) });
   }
@@ -135,29 +208,7 @@ function buildMangoTrees(tex, rng) {
 export function createTerrain() {
   const tex = getTextures();
   const group = new THREE.Group();
-
-  const size = WORLD_HALF * 2;
-  const groundMap = tex.grassTop.clone();
-  groundMap.repeat.set(size, size);
-  const ground = new THREE.Mesh(
-    new THREE.PlaneGeometry(size, size),
-    new THREE.MeshLambertMaterial({ map: groundMap }),
-  );
-  ground.rotation.x = -Math.PI / 2;
-  group.add(ground);
-
-  const pathLength = PATH.zEnd - PATH.zStart;
-  const pathMap = tex.path.clone();
-  pathMap.repeat.set(PATH.halfWidth * 2, pathLength);
-  const path = new THREE.Mesh(
-    new THREE.PlaneGeometry(PATH.halfWidth * 2, pathLength),
-    new THREE.MeshLambertMaterial({ map: pathMap }),
-  );
-  path.rotation.x = -Math.PI / 2;
-  path.position.set(0, 0.01, PATH.zStart + pathLength / 2);
-  group.add(path);
-
-  group.add(buildHills(tex));
+  group.add(buildGround(tex), buildHills(tex));
 
   const trees = buildMangoTrees(tex, mulberry32(2024));
   group.add(trees.group);

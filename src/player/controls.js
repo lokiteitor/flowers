@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import { resolveCollisions } from './collision.js';
 import { PLAYER, SPAWN } from '../world/layout.js';
+import { groundHeightAt, WATER_LEVEL } from '../world/river.js';
 
 const WALK = 4.3;
 const SPRINT = 6.4;
+const WADING = 0.55; // dentro del río se avanza más despacio
 const JUMP = 7.6;
 const GRAVITY = 24;
 const MOUSE_SENSITIVITY = 0.0022;
@@ -26,6 +28,7 @@ export function createPlayer(camera, element, colliders) {
   let pitch = 0;
   let onGround = true;
   let bob = 0;
+  let eyeBase = 0; // altura de los pies suavizada, para no dar un tirón al subir la orilla
   let enabled = false;
 
   camera.rotation.order = 'YXZ';
@@ -57,7 +60,8 @@ export function createPlayer(camera, element, colliders) {
     setTouchMove: (x, y) => touchMove.set(x, y),
     onLockChange: (fn) => lockListeners.push(fn),
     teleport(x, z, newYaw = 0, newPitch = 0) {
-      position.set(x, 0, z);
+      position.set(x, groundHeightAt(x, z), z);
+      eyeBase = position.y;
       velocity.set(0, 0, 0);
       yaw = newYaw;
       pitch = newPitch;
@@ -93,7 +97,8 @@ export function createPlayer(camera, element, colliders) {
       const len = Math.hypot(mx, mz);
       if (len > 1) { mx /= len; mz /= len; }
 
-      const speed = pressed.has('ShiftLeft') || pressed.has('ShiftRight') ? SPRINT : WALK;
+      const wading = position.y < WATER_LEVEL - 0.3;
+      const speed = (pressed.has('ShiftLeft') || pressed.has('ShiftRight') ? SPRINT : WALK) * (wading ? WADING : 1);
       const sin = Math.sin(yaw);
       const cos = Math.cos(yaw);
       const targetX = (mx * cos - mz * sin) * speed;
@@ -109,17 +114,22 @@ export function createPlayer(camera, element, colliders) {
       velocity.y -= GRAVITY * dt;
 
       position.addScaledVector(velocity, dt);
-      if (position.y <= 0) {
-        position.y = 0;
+      resolveCollisions(position, PLAYER.radius, colliders);
+      // El suelo baja un bloque en el cauce del río; al salir, la orilla se sube sola.
+      const ground = groundHeightAt(position.x, position.z);
+      if (position.y <= ground) {
+        position.y = ground;
         velocity.y = 0;
         onGround = true;
+      } else {
+        onGround = false;
       }
-      resolveCollisions(position, PLAYER.radius, colliders);
+      eyeBase = position.y > eyeBase && onGround ? eyeBase + (position.y - eyeBase) * (1 - Math.exp(-14 * dt)) : position.y;
 
       const pace = Math.hypot(velocity.x, velocity.z);
       if (onGround) bob += pace * dt * 1.9;
       const sway = onGround ? Math.sin(bob) * 0.035 * Math.min(1, pace / WALK) : 0;
-      camera.position.set(position.x, position.y + PLAYER.eye + sway, position.z);
+      camera.position.set(position.x, eyeBase + PLAYER.eye + sway, position.z);
       camera.rotation.set(pitch, yaw, 0);
     },
   };

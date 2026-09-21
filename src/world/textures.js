@@ -113,35 +113,6 @@ function sunflowerHead(front) {
   };
 }
 
-function fromRows(rows, palette) {
-  return (put) => {
-    rows.forEach((row, y) => {
-      [...row].forEach((ch, x) => {
-        if (palette[ch]) put(x, y, palette[ch]);
-      });
-    });
-  };
-}
-
-const HEART = [
-  '................',
-  '................',
-  '..oooo....oooo..',
-  '.orrrro..orrrro.',
-  'orrwwrroorrrrrro',
-  'orrwrrrrrrrrrrro',
-  'orrrrrrrrrrrrrro',
-  'orrrrrrrrrrrrrro',
-  '.orrrrrrrrrrrro.',
-  '..orrrrrrrrrro..',
-  '...orrrrrrrro...',
-  '....orrrrrro....',
-  '.....orrrro.....',
-  '......orro......',
-  '.......oo.......',
-  '................',
-];
-
 function emptyFrame(put, rng, size) {
   const ink = [122, 92, 58];
   const c = size / 2;
@@ -179,6 +150,136 @@ function celestial(base, rim, spots) {
   };
 }
 
+
+function water(put, rng, size) {
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const ripple = (x + y * 5) % 16 === 0 || ((x * 3 + y) % 23 === 0 && rng() < 0.5);
+      put(x, y, jitter(ripple ? [96, 150, 214] : [24, 70, 150], rng, 0.1));
+    }
+  }
+}
+
+function lilypad(put, rng, size) {
+  const c = (size - 1) / 2;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const dx = x - c, dy = y - c;
+      const notch = dx > 0 && Math.abs(dy) < dx * 0.35; // la muesca típica de la hoja
+      if (Math.hypot(dx, dy) < 6.6 && !notch) put(x, y, jitter([38, 122, 46], rng, 0.2));
+    }
+  }
+}
+
+function checker(a, b) {
+  return (put, rng, size) => {
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const edge = x % 8 === 0 || y % 8 === 0;
+        const base = ((x >> 3) + (y >> 3)) % 2 ? a : b;
+        put(x, y, jitter(edge ? shade(base, 0.85) : base, rng, 0.05));
+      }
+  };
+}
+
+// Frente de electrodoméstico o de armario: panel liso con marco y un tirador.
+function appliance(base, handle) {
+  return (put, rng, size) => {
+    for (let y = 0; y < size; y++)
+      for (let x = 0; x < size; x++) {
+        const edge = x === 0 || y === 0 || x === size - 1 || y === size - 1;
+        const grip = x >= 12 && x <= 13 && y >= 4 && y <= 11;
+        put(x, y, grip ? handle : jitter(edge ? shade(base, 0.8) : base, rng, 0.04));
+      }
+  };
+}
+
+function stoveTop(put, rng, size) {
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const d = Math.hypot((x % 8) - 3.5, (y % 8) - 3.5);
+      put(x, y, jitter(d > 1.6 && d < 3.1 ? [24, 24, 28] : [78, 80, 86], rng, 0.08));
+    }
+}
+
+function ovenFront(put, rng, size) {
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const glass = x > 2 && x < 13 && y > 5 && y < 13;
+      const knob = y === 2 && x % 4 === 2;
+      put(x, y, knob ? [230, 230, 230] : jitter(glass ? [30, 26, 24] : [78, 80, 86], rng, 0.08));
+    }
+}
+
+function envelope(put, rng, size) {
+  const rows = [
+    'oooooooooooooooo',
+    'owppppppppppppwo',
+    'oppwppppppppwppo',
+    'oppppwppppwppppo',
+    'oppppprrprrppppo',
+    'oppppprrrrrppppo',
+    'opppppprrrpppppo',
+    'oppppppprppppppo',
+    'oppppppppppppppo',
+    'oooooooooooooooo',
+  ];
+  const palette = { o: [150, 120, 84], p: [250, 240, 214], w: [206, 186, 150], r: [214, 48, 66] };
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const row = rows[Math.min(rows.length - 1, Math.floor((y / size) * rows.length))];
+      put(x, y, jitter(palette[row[x]] ?? palette.p, rng, 0.03));
+    }
+}
+
+// Flores de jardín como las de Minecraft: un dibujo 16×16 con tallo, hojas y cabeza,
+// que luego se monta sobre dos planos cruzados.
+function flowerSprite(shape, petal, heart) {
+  return (put, rng) => {
+    const stem = [62, 128, 46];
+    const topOf = { daisy: 6, tulip: 6, ball: 7, spike: 8 }[shape];
+    for (let y = topOf; y < 16; y++) put(7, y, jitter(stem, rng, 0.15));
+    for (const [x, y] of [[6, 12], [5, 11], [8, 13], [9, 12], [10, 11]]) put(x, y, jitter(stem, rng, 0.2));
+
+    if (shape === 'daisy') {
+      for (let y = 0; y < 8; y++)
+        for (let x = 3; x < 12; x++) {
+          const d = Math.hypot(x - 7, y - 3.5);
+          if (d < 1.3) put(x, y, jitter(heart, rng, 0.1));
+          else if (d < 2.8 || (d < 3.7 && (x + y) % 2 === 0)) put(x, y, jitter(petal, rng, 0.12));
+        }
+    } else if (shape === 'tulip') {
+      for (let y = 1; y < 7; y++)
+        for (let x = 5; x < 10; x++) {
+          if (y === 1 && x % 2 === 0) continue; // puntas de los pétalos
+          if (y === 6 && (x === 5 || x === 9)) continue;
+          put(x, y, jitter(x === 7 ? shade(petal, 0.85) : petal, rng, 0.1));
+        }
+    } else if (shape === 'ball') {
+      for (let y = 0; y < 8; y++)
+        for (let x = 3; x < 12; x++)
+          if (Math.hypot(x - 7, y - 3.5) < 3.4) put(x, y, jitter(rng() < 0.3 ? heart : petal, rng, 0.15));
+    } else {
+      for (let y = 0; y < 9; y++) {
+        const half = y < 2 ? 0 : 1;
+        for (let x = 7 - half; x <= 7 + half; x++) put(x, y, jitter(rng() < 0.3 ? heart : petal, rng, 0.15));
+      }
+    }
+  };
+}
+
+export const FLOWER_KINDS = {
+  poppy: ['daisy', [214, 40, 40], [40, 20, 20]],
+  daisy: ['daisy', [245, 245, 245], [250, 204, 50]],
+  cornflower: ['daisy', [70, 110, 230], [40, 60, 160]],
+  dandelion: ['daisy', [252, 214, 40], [244, 164, 28]],
+  pinkTulip: ['tulip', [240, 130, 180], null],
+  orangeTulip: ['tulip', [244, 140, 40], null],
+  yellowTulip: ['tulip', [250, 214, 50], null],
+  allium: ['ball', [178, 102, 226], [214, 160, 245]],
+  lavender: ['spike', [140, 110, 220], [186, 160, 245]],
+};
+
 let cache;
 
 export function getTextures() {
@@ -208,11 +309,34 @@ export function getTextures() {
     stem: makeTexture(8, 21, (put, rng, s) => fillNoise(put, rng, s, [78, 138, 48], 0.2)),
     flowerFront: makeTexture(16, 22, sunflowerHead(true)),
     flowerBack: makeTexture(16, 23, sunflowerHead(false)),
-    heart: makeTexture(16, 24, fromRows(HEART, { o: [92, 16, 28], r: [226, 48, 66], w: [255, 190, 200] })),
     frameWood: makeTexture(16, 25, planks([78, 50, 30])),
     emptyFrame: makeTexture(32, 26, emptyFrame),
     rug: makeTexture(16, 27, rug),
     lantern: makeTexture(8, 28, (put, rng, s) => fillNoise(put, rng, s, [255, 214, 120], 0.18)),
+    sand: makeTexture(16, 32, (put, rng, s) => fillNoise(put, rng, s, [168, 156, 116], 0.14)),
+    water: makeTexture(16, 33, water),
+    lilypad: makeTexture(16, 34, lilypad),
+    mulch: makeTexture(16, 35, (put, rng, s) => fillNoise(put, rng, s, [84, 58, 40], 0.3)),
+    tile: makeTexture(16, 36, checker([236, 228, 210], [196, 112, 84])),
+    counter: makeTexture(16, 37, (put, rng, s) => fillNoise(put, rng, s, [168, 168, 172], 0.08)),
+    fridge: makeTexture(16, 38, appliance([232, 236, 240], [120, 124, 130])),
+    cabinet: makeTexture(16, 39, appliance([150, 104, 62], [60, 40, 24])),
+    stoveTop: makeTexture(16, 40, stoveTop),
+    ovenFront: makeTexture(16, 41, ovenFront),
+    metal: makeTexture(8, 42, (put, rng, s) => fillNoise(put, rng, s, [78, 80, 86], 0.08)),
+    woolRed: makeTexture(16, 43, (put, rng, s) => fillNoise(put, rng, s, [176, 46, 52], 0.14)),
+    woolWhite: makeTexture(16, 44, (put, rng, s) => fillNoise(put, rng, s, [238, 236, 230], 0.08)),
+    ceramic: makeTexture(8, 45, (put, rng, s) => {
+      for (let y = 0; y < s; y++)
+        for (let x = 0; x < s; x++) put(x, y, jitter(y === 2 || y === 5 ? [70, 120, 200] : [240, 242, 246], rng, 0.05));
+    }),
+    envelope: makeTexture(16, 46, envelope),
+    flowers: Object.fromEntries(
+      Object.entries(FLOWER_KINDS).map(([name, [shape, petal, heart]], i) => [
+        name,
+        makeTexture(16, 60 + i, flowerSprite(shape, petal, heart ?? petal)),
+      ]),
+    ),
     sun: makeTexture(8, 29, celestial([255, 246, 190], [255, 224, 120], false)),
     moon: makeTexture(8, 30, celestial([226, 232, 246], [196, 204, 226], true)),
   };

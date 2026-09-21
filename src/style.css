@@ -84,7 +84,7 @@ body {
   line-height: 1.15;
 }
 
-#letter-signature {
+.signature {
   margin-top: 18px;
   font-size: 26px;
   text-align: right;

@@ -1,11 +1,17 @@
 import * as THREE from 'three';
 import { getTextures } from './textures.js';
-import { tiledBox, footprint } from './blocks.js';
+import { tiledBox, footprint, mergeStatic } from './blocks.js';
 import { HOUSE } from './layout.js';
+import { furnish } from './furniture.js';
 
 const { halfX: HX, halfZ: HZ, wallHeight: WALL, doorHalf: DOOR, doorHeight: DOOR_H } = HOUSE;
-const STONE = 1; // altura del zócalo de piedra
-const WINDOW = { x0: 2, x1: 4, y0: 1, y1: 3 }; // ventanas de la fachada (la izquierda es su espejo)
+const STONE = 1; // altura del zócalo de piedra de los muros exteriores
+const HEADROOM = 1.8; // una pieza que empieza por encima no estorba al jugador
+
+// Planta (interior de -8…8 en X y -6…6 en Z, puerta en +Z):
+//   · comedor delante a la izquierda, cocina al fondo a la izquierda,
+//   · dormitorio a la derecha, tras un tabique en x = 2…3 con su hueco de paso.
+const PARTITION = { x0: 2, x1: 3, door: [1, 3] };
 
 export function createHouse() {
   const tex = getTextures();
@@ -15,26 +21,46 @@ export function createHouse() {
     cobble: new THREE.MeshLambertMaterial({ map: tex.cobble }),
     log: new THREE.MeshLambertMaterial({ map: tex.log }),
     glass: new THREE.MeshLambertMaterial({ map: tex.glass, transparent: true, side: THREE.DoubleSide }),
-    lantern: new THREE.MeshBasicMaterial({ map: tex.lantern }),
-    chain: new THREE.MeshLambertMaterial({ color: 0x3a3a40 }),
-    heart: new THREE.MeshBasicMaterial({ map: tex.heart, transparent: true, alphaTest: 0.5 }),
-    rug: new THREE.MeshLambertMaterial({ map: tex.rug }),
+    tile: new THREE.MeshLambertMaterial({ map: tex.tile }),
   };
 
-  const group = new THREE.Group();
+  const pieces = new THREE.Group();
   const colliders = [];
   const add = (min, max, material, solid = false) => {
-    group.add(tiledBox(min, max, material));
+    pieces.add(tiledBox(min, max, material));
     if (solid) colliders.push(footprint(min, max));
   };
-  // Muro con zócalo de piedra abajo y tablones arriba.
-  const wall = (x0, z0, x1, z1) => {
-    add([x0, 0, z0], [x1, STONE, z1], mat.cobble, true);
-    add([x0, STONE, z0], [x1, WALL, z1], mat.planks);
-  };
+
+  // Muro recto con huecos. axis 'x': corre a lo largo de X ocupando z = c0…c1; 'z', al revés.
+  // Cada hueco es { a0, a1, y0, y1, glass }: se rellena por debajo y por encima.
+  function wallRun(axis, c0, c1, from, to, openings = [], { stone = true } = {}) {
+    const box = (a0, a1, y0, y1, material, solid, inset = 0) => {
+      const min = axis === 'x' ? [a0, y0, c0 + inset] : [c0 + inset, y0, a0];
+      const max = axis === 'x' ? [a1, y1, c1 - inset] : [c1 - inset, y1, a1];
+      add(min, max, material, solid);
+    };
+    const fill = (a0, a1, y0, y1) => {
+      if (a1 <= a0 || y1 <= y0) return;
+      const split = stone ? Math.min(Math.max(STONE, y0), y1) : y0;
+      if (split > y0) box(a0, a1, y0, split, mat.cobble, y0 < HEADROOM);
+      if (y1 > split) box(a0, a1, split, y1, mat.planks, split === y0 && y0 < HEADROOM);
+    };
+    let cursor = from;
+    for (const o of [...openings].sort((p, q) => p.a0 - q.a0)) {
+      fill(cursor, o.a0, 0, WALL);
+      fill(o.a0, o.a1, 0, o.y0);
+      fill(o.a0, o.a1, o.y1, WALL);
+      if (o.glass) box(o.a0, o.a1, o.y0, o.y1, mat.glass, false, (c1 - c0) / 2 - 0.06);
+      cursor = o.a1;
+    }
+    fill(cursor, to, 0, WALL);
+  }
+  const windowAt = (a0, a1, y0 = 1, y1 = 3) => ({ a0, a1, y0, y1, glass: true });
+  const doorway = (a0, a1) => ({ a0, a1, y0: 0, y1: DOOR_H });
 
   // El suelo acaba a media pared para no asomar por fuera; el escalón cubre el umbral.
   add([-HX + 0.5, -0.2, -HZ + 0.5], [HX - 0.5, 0.02, HZ - 0.5], mat.planks);
+  add([-HX + 1, 0, -HZ + 1], [-1, 0.035, -2], mat.tile); // baldosas de la cocina
   add([-DOOR - 0.5, -0.3, HZ - 0.5], [DOOR + 0.5, 0.04, HZ + 1], mat.cobble);
 
   for (const sx of [-1, 1]) {
@@ -45,24 +71,11 @@ export function createHouse() {
     }
   }
 
-  wall(-HX + 1, -HZ, HX - 1, -HZ + 1); // fondo
-  wall(-HX, -HZ + 1, -HX + 1, HZ - 1); // izquierda
-  wall(HX - 1, -HZ + 1, HX, HZ - 1); // derecha
-
-  // Fachada: a cada lado de la puerta, un paño con su ventana.
-  for (const s of [-1, 1]) {
-    const span = (a, b) => (s === 1 ? [a, b] : [-b, -a]);
-    const [edge0, edge1] = span(DOOR, HX - 1);
-    const [win0, win1] = span(WINDOW.x0, WINDOW.x1);
-    const [jamb0, jamb1] = span(DOOR, WINDOW.x0);
-    const [far0, far1] = span(WINDOW.x1, HX - 1);
-    add([edge0, 0, HZ - 1], [edge1, STONE, HZ], mat.cobble, true);
-    add([jamb0, STONE, HZ - 1], [jamb1, WALL, HZ], mat.planks);
-    add([far0, STONE, HZ - 1], [far1, WALL, HZ], mat.planks);
-    add([win0, WINDOW.y1, HZ - 1], [win1, WALL, HZ], mat.planks);
-    add([win0, WINDOW.y0, HZ - 0.56], [win1, WINDOW.y1, HZ - 0.44], mat.glass);
-  }
-  add([-DOOR, DOOR_H, HZ - 1], [DOOR, WALL, HZ], mat.planks); // dintel
+  wallRun('x', -HZ, -HZ + 1, -HX + 1, HX - 1, [windowAt(-7, -5, 2, 3)]); // fondo: ventana sobre el fregadero
+  wallRun('x', HZ - 1, HZ, -HX + 1, HX - 1, [windowAt(-6, -4), doorway(-DOOR, DOOR), windowAt(4, 6)]);
+  wallRun('z', -HX, -HX + 1, -HZ + 1, HZ - 1, [windowAt(1, 3)]);
+  wallRun('z', HX - 1, HX, -HZ + 1, HZ - 1, [windowAt(-1, 1)]);
+  wallRun('z', PARTITION.x0, PARTITION.x1, -HZ + 1, HZ - 1, [doorway(...PARTITION.door)], { stone: false });
 
   // Tejado a dos aguas en escalones de medio bloque, con alero de un bloque.
   for (let k = 0; k <= HZ; k++) {
@@ -77,42 +90,9 @@ export function createHouse() {
     add([HX - 1, y0, -HZ + j], [HX, y0 + 0.5, HZ - j], mat.planks);
   }
 
-  // Farol colgado de la cumbrera, con luz cálida.
-  const ridge = WALL + HZ * 0.5;
-  add([-0.04, 4.6, -0.04], [0.04, ridge, 0.04], mat.chain);
-  add([-0.25, 4.1, -0.25], [0.25, 4.6, 0.25], mat.lantern);
-  const glow = new THREE.PointLight(0xffc37a, 30, 22, 1.8);
-  glow.position.set(0, 4, 0);
-  group.add(glow);
+  const furniture = furnish(pieces, colliders);
 
-  const rug = new THREE.Mesh(new THREE.PlaneGeometry(5, 3.5), mat.rug);
-  rug.rotation.x = -Math.PI / 2;
-  rug.position.set(0, 0.03, 0);
-  group.add(rug);
-
-  const heart = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat.heart);
-  heart.position.set(0, DOOR_H + 1, HZ + 0.01);
-  group.add(heart);
-
-  return { group, colliders, glow };
-}
-
-// Huecos para cuadros en las paredes interiores, en orden de recorrido:
-// pared izquierda (de la puerta al fondo), fondo, pared derecha (del fondo a la puerta).
-export function frameSlots(rows) {
-  const inset = 0.05; // separación de la pared
-  const layout =
-    rows === 1
-      ? { width: 1.9, height: 2.2, centers: [2.55] }
-      : { width: 1.9, height: 1.7, centers: [3.55, 1.45] };
-  const columns = [];
-  for (const z of [2.6, 0, -2.6]) columns.push({ x: -HX + 1 + inset, z, facing: Math.PI / 2 });
-  for (const x of [-4.8, -2.4, 0, 2.4, 4.8]) columns.push({ x, z: -HZ + 1 + inset, facing: 0 });
-  for (const z of [-2.6, 0, 2.6]) columns.push({ x: HX - 1 - inset, z, facing: -Math.PI / 2 });
-
-  const slots = [];
-  for (const column of columns) {
-    for (const y of layout.centers) slots.push({ ...column, y, width: layout.width, height: layout.height });
-  }
-  return slots;
+  const group = new THREE.Group();
+  group.add(mergeStatic(pieces), furniture.extras);
+  return { group, colliders, frameSlots: furniture.frameSlots, letter: furniture.letter };
 }

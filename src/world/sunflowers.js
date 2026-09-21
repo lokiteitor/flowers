@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../util/random.js';
 import { getTextures } from './textures.js';
-import { HOUSE, PATH } from './layout.js';
+import { HOUSE, PATH, GARDEN } from './layout.js';
+import { RIVER_HALF, riverDistance } from './river.js';
 
 const FIELD_HALF = 47;
 
@@ -70,6 +71,8 @@ function leafGeometry() {
 function isClear(x, z, treeSpots) {
   if (Math.abs(x) < HOUSE.halfX + 2.5 && Math.abs(z) < HOUSE.halfZ + 2.5) return false;
   if (Math.abs(x) < PATH.halfWidth + 0.7 && z > 0 && z < PATH.zEnd + 1.5) return false;
+  if (Math.abs(x) < GARDEN.halfX + 0.8 && z > 0 && z < GARDEN.zEnd + 0.8) return false;
+  if (riverDistance(x, z) < RIVER_HALF + 0.9) return false;
   return !treeSpots.some((t) => Math.hypot(t.x - x, t.z - z) < 1.2);
 }
 

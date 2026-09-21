@@ -22,7 +22,7 @@
       <article class="letter">
         <h1 id="letter-title"></h1>
         <div id="letter-body"></div>
-        <p id="letter-signature"></p>
+        <p id="letter-signature" class="signature"></p>
         <button id="enter" class="pixel-button" type="button"></button>
       </article>
     </div>
@@ -32,7 +32,7 @@
         <h2>En pausa</h2>
         <p>WASD o flechas para caminar · Ratón para mirar</p>
         <p>Espacio para saltar · Mayús para correr</p>
-        <p>Clic sobre un cuadro para verlo o colocar una foto</p>
+        <p>Clic sobre un portarretratos para verlo o colocar una foto</p>
         <button id="resume" class="pixel-button" type="button">Continuar</button>
       </div>
     </div>
@@ -43,6 +43,15 @@
         <button id="lightbox-remove" class="pixel-button danger" type="button">Quitar foto</button>
         <button id="lightbox-close" class="pixel-button" type="button">Cerrar</button>
       </div>
+    </div>
+
+    <div id="note" class="overlay" hidden>
+      <article class="letter">
+        <h1 id="note-title"></h1>
+        <div id="note-body"></div>
+        <p id="note-signature" class="signature"></p>
+        <button id="note-close" class="pixel-button" type="button">Cerrar</button>
+      </article>
     </div>
 
     <div id="toast" hidden></div>
