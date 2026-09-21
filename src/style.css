@@ -186,6 +186,23 @@ body {
   top: calc(22px + env(safe-area-inset-top));
 }
 
+/* Botón de sonido */
+#mute {
+  position: fixed;
+  top: calc(12px + env(safe-area-inset-top));
+  right: calc(12px + env(safe-area-inset-right));
+  margin: 0;
+  padding: 2px 14px 6px;
+  font-size: 30px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+#mute.off {
+  filter: grayscale(1) brightness(0.75);
+  text-decoration: line-through;
+}
+
 /* Joystick táctil */
 #stick-base,
 #stick-knob {

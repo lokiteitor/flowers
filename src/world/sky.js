@@ -98,7 +98,7 @@ function createDisc(map, size) {
 // Nubes planas en bloques sobre un patrón periódico: al derivar, el dibujo se recoloca
 // celda a celda y el salto queda oculto por la niebla.
 function createClouds() {
-  const CELLS = 56;
+  const CELLS = 72;
   const CELL = 5;
   const HEIGHT = 46;
   const pattern = [];
@@ -156,7 +156,7 @@ export function createSky(scene, { cycleSeconds, startPhase }) {
   const sunLight = new THREE.DirectionalLight(0xffffff, 1);
   const hemi = new THREE.HemisphereLight(0xffffff, 0x5a6b3c, 1);
   scene.add(group, clouds.mesh, sunLight, sunLight.target, hemi);
-  scene.fog = new THREE.Fog(0xffffff, 38, 120);
+  scene.fog = new THREE.Fog(0xffffff, 46, 140);
 
   const ramps = {
     zenith: makeRamp(ZENITH), horizon: makeRamp(HORIZON), sunlight: makeRamp(SUNLIGHT), clouds: makeRamp(CLOUDS),

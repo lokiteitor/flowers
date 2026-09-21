@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import { mulberry32, valueNoise } from '../util/random.js';
+import { valueNoise } from '../util/random.js';
 import { getTextures } from './textures.js';
-import { footprint } from './blocks.js';
-import { WORLD_HALF, HILLS_HALF, PATH } from './layout.js';
+import { instancedBlocks } from './blocks.js';
+import { WORLD_HALF, HILLS_HALF, PATH, HUERTO } from './layout.js';
 import { RIVER_HALF, RIVER_BED, riverDistance, isRiverCell } from './river.js';
 
 function hillHeight(ix, iz) {
@@ -60,7 +60,9 @@ function buildGround(tex) {
     for (let iz = -HILLS_HALF; iz < HILLS_HALF; iz++) {
       if (hillHeight(ix, iz) > 0) continue;
       if (!isRiverCell(ix, iz)) {
-        const onPath = Math.abs(ix + 0.5) < PATH.halfWidth && iz >= PATH.zStart && iz < PATH.zEnd;
+        // El camino de la entrada y el caminito que cruza el huerto desde la puerta trasera.
+        const onPath = Math.abs(ix + 0.5) < PATH.halfWidth
+          && ((iz >= PATH.zStart && iz < PATH.zEnd) || (iz < HUERTO.zNear && iz >= HUERTO.zFar - 2));
         (onPath ? path : grass).top(ix, iz, 0);
         continue;
       }
@@ -81,14 +83,6 @@ function buildGround(tex) {
     banks.toMesh(new THREE.MeshLambertMaterial({ map: tex.dirt })),
   );
   return group;
-}
-
-function instancedBlocks(positions, material) {
-  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1), material, positions.length);
-  const m = new THREE.Matrix4();
-  positions.forEach(([x, y, z], i) => mesh.setMatrixAt(i, m.makeTranslation(x, y, z)));
-  mesh.instanceMatrix.needsUpdate = true;
-  return mesh;
 }
 
 function buildHills(tex) {
@@ -118,100 +112,9 @@ function buildHills(tex) {
   return group;
 }
 
-// Mangos instanciados; el color por instancia va de verde (sin madurar) a rojizo.
-function buildMangoes(fruits, tex, rng) {
-  const geometry = new THREE.BoxGeometry(0.3, 0.42, 0.3);
-  const mesh = new THREE.InstancedMesh(geometry, new THREE.MeshLambertMaterial({ map: tex.mango }), fruits.length);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const euler = new THREE.Euler();
-  const pos = new THREE.Vector3();
-  const scl = new THREE.Vector3();
-  const tint = new THREE.Color();
-  fruits.forEach(({ x, y, z, fallen }, i) => {
-    euler.set(fallen ? Math.PI / 2 : (rng() - 0.5) * 0.3, rng() * Math.PI * 2, (rng() - 0.5) * 0.3);
-    m.compose(pos.set(x, y, z), q.setFromEuler(euler), scl.setScalar(0.85 + rng() * 0.35));
-    mesh.setMatrixAt(i, m);
-    const ripeness = rng();
-    mesh.setColorAt(i, ripeness < 0.2 ? tint.setRGB(0.55, 0.85, 0.35) : tint.setRGB(1, 0.8 + ripeness * 0.2, 0.75 + ripeness * 0.25));
-  });
-  mesh.instanceMatrix.needsUpdate = true;
-  return mesh;
-}
-
-// Árboles de mango: tronco corto y copa ancha, densa y redondeada, con la fruta
-// colgando por debajo. Dos van fijos junto a la casita; el resto, repartidos por el campo.
-function buildMangoTrees(tex, rng) {
-  const spots = [
-    { x: -15.5, z: 3.5, height: 5 },
-    { x: 15.5, z: -7.5, height: 4 },
-  ];
-  let attempts = 0;
-  while (spots.length < 11 && attempts++ < 400) {
-    const x = Math.round((rng() * 2 - 1) * 41) + 0.5;
-    const z = Math.round((rng() * 2 - 1) * 41) + 0.5;
-    if (Math.hypot(x, z) < 24) continue;
-    if (z > 0 && Math.abs(x) < 7) continue; // no tapar la vista del camino
-    if (riverDistance(x, z) < RIVER_HALF + 5) continue; // ni crecer dentro del río
-    if (spots.some((s) => Math.hypot(s.x - x, s.z - z) < 12)) continue;
-    spots.push({ x, z, height: 4 + Math.floor(rng() * 2) });
-  }
-
-  const trunks = [];
-  const leaves = [];
-  const fruits = [];
-  for (const { x, z, height } of spots) {
-    for (let y = 0; y < height + 2; y++) trunks.push([x, y + 0.5, z]);
-
-    const reach = 3.3 + rng() * 0.6;
-    const rise = 2.6;
-    const centerY = height + 2;
-    const inCanopy = (dx, dy, dz) => {
-      const bumps = valueNoise((x + dx) * 0.7, (z + dz) * 0.7 + dy * 1.3, 17) * 0.35;
-      return (dx / reach) ** 2 + (dy / rise) ** 2 + (dz / reach) ** 2 <= 0.8 + bumps;
-    };
-    const R = Math.ceil(reach) + 1;
-    for (let dx = -R; dx <= R; dx++) {
-      for (let dz = -R; dz <= R; dz++) {
-        for (let dy = -3; dy <= 3; dy++) {
-          if (!inCanopy(dx, dy, dz)) continue;
-          // El interior de la copa no se ve: solo se dibuja la cáscara.
-          const buried =
-            inCanopy(dx + 1, dy, dz) && inCanopy(dx - 1, dy, dz) && inCanopy(dx, dy + 1, dz) &&
-            inCanopy(dx, dy - 1, dz) && inCanopy(dx, dy, dz + 1) && inCanopy(dx, dy, dz - 1);
-          const onTrunk = dx === 0 && dz === 0 && dy < 0;
-          if (!buried && !onTrunk) leaves.push([x + dx, centerY + dy + 0.5, z + dz]);
-
-          const underside = !inCanopy(dx, dy - 1, dz) && (dx !== 0 || dz !== 0);
-          if (underside && rng() < 0.22) {
-            fruits.push({ x: x + dx + (rng() - 0.5) * 0.5, y: centerY + dy - 0.26, z: z + dz + (rng() - 0.5) * 0.5 });
-          }
-        }
-      }
-    }
-    // Algunos mangos ya cayeron al pie del árbol.
-    for (let i = 0; i < 3; i++) {
-      const a = rng() * Math.PI * 2;
-      const r = 1.2 + rng() * 2.2;
-      fruits.push({ x: x + Math.cos(a) * r, y: 0.15, z: z + Math.sin(a) * r, fallen: true });
-    }
-  }
-
-  const group = new THREE.Group();
-  group.add(instancedBlocks(trunks, new THREE.MeshLambertMaterial({ map: tex.log })));
-  group.add(instancedBlocks(leaves, new THREE.MeshLambertMaterial({ map: tex.leaves })));
-  group.add(buildMangoes(fruits, tex, rng));
-  const colliders = spots.map(({ x, z }) => footprint([x - 0.5, 0, z - 0.5], [x + 0.5, 0, z + 0.5]));
-  return { group, spots, colliders };
-}
-
 export function createTerrain() {
   const tex = getTextures();
   const group = new THREE.Group();
   group.add(buildGround(tex), buildHills(tex));
-
-  const trees = buildMangoTrees(tex, mulberry32(2024));
-  group.add(trees.group);
-
-  return { group, colliders: trees.colliders, treeSpots: trees.spots };
+  return { group };
 }

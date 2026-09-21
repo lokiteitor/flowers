@@ -22,8 +22,12 @@ export const config = {
     signature: 'Te quiero',
   },
 
+  // Cine del dormitorio. Pasa las fotos de photos/ como una película; si hay un video en
+  // videos/ (mp4 o webm), proyecta ese en su lugar.
+  movie: { title: 'Nuestra película', secondsPerPhoto: 5 },
+
   // Duración de un ciclo completo día → atardecer → noche → amanecer, en segundos.
-  dayCycleSeconds: 300,
+  dayCycleSeconds: 900,
   // Momento inicial del ciclo (0 = amanecer, 0.375 = mediodía, 0.75 = puesta de sol).
   // 0.68 es la hora dorada: lo primero que se ve es el campo al atardecer.
   startPhase: 0.68,
@@ -31,7 +35,4 @@ export const config = {
   // Separación entre girasoles, en bloques (menos = campo más denso y más carga gráfica).
   flowerSpacing: 1.25,
   flowerSpacingMobile: 1.7,
-
-  // Marcos vacíos que siempre se dejan libres para subir fotos desde el juego.
-  spareFrames: 2,
 };

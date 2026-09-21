@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { mulberry32 } from '../util/random.js';
 import { getTextures } from './textures.js';
-import { tiledBox, footprint, mergeStatic } from './blocks.js';
+import { tiledBox, mergeStatic } from './blocks.js';
+import { fenceBuilder } from './fence.js';
 import { plantFlowers } from './flowers.js';
-import { GARDEN, HOUSE } from './layout.js';
+import { GARDEN, HOUSE, WORLD_HALF } from './layout.js';
 import { RIVER_HALF, riverZ } from './river.js';
 
 // Una variedad por surco, de la casa hacia la cerca.
@@ -22,20 +23,7 @@ export function createGarden() {
   const colliders = [];
   const plants = [];
 
-  // Tramo de cerca recto entre dos puntos, con postes cada ~1,5 bloques y dos travesaños.
-  function fence(x0, z0, x1, z1) {
-    const length = Math.hypot(x1 - x0, z1 - z0);
-    const posts = Math.max(1, Math.round(length / 1.5));
-    for (let i = 0; i <= posts; i++) {
-      const x = x0 + ((x1 - x0) * i) / posts;
-      const z = z0 + ((z1 - z0) * i) / posts;
-      pieces.add(tiledBox([x - 0.12, 0, z - 0.12], [x + 0.12, 1.05, z + 0.12], logs));
-    }
-    const min = [Math.min(x0, x1) - 0.06, 0, Math.min(z0, z1) - 0.06];
-    const max = [Math.max(x0, x1) + 0.06, 0, Math.max(z0, z1) + 0.06];
-    for (const y of [0.4, 0.8]) pieces.add(tiledBox([min[0], y, min[2]], [max[0], y + 0.13, max[2]], wood));
-    colliders.push(footprint(min, max));
-  }
+  const fence = fenceBuilder(pieces, colliders, { posts: logs, rails: wood });
 
   const { halfX, zStart, zEnd, gateHalf } = GARDEN;
   for (const s of [-1, 1]) {
@@ -84,8 +72,8 @@ export function createGarden() {
 
   // Flores silvestres salpicando las orillas del río.
   const wild = ['poppy', 'daisy', 'cornflower', 'dandelion', 'allium'];
-  for (let i = 0; i < 110; i++) {
-    const x = (rng() * 2 - 1) * 46;
+  for (let i = 0; i < 140; i++) {
+    const x = (rng() * 2 - 1) * (WORLD_HALF - 2);
     if (Math.abs(x) < 2.5) continue;
     const side = rng() < 0.5 ? -1 : 1;
     const z = riverZ(x) + side * (RIVER_HALF + 0.5 + rng() * 1.6);

@@ -8,15 +8,22 @@ import { createHouse } from './world/house.js';
 import { createSky } from './world/sky.js';
 import { createRiverscape } from './world/riverscape.js';
 import { createGarden } from './world/garden.js';
+import { createHuerto } from './world/huerto.js';
+import { createTrees } from './world/trees.js';
+import { createEdibles } from './world/edibles.js';
+import { createTurkeys, gobble } from './world/turkeys.js';
 import { HOUSE, SPAWN } from './world/layout.js';
 import { createPlayer } from './player/controls.js';
 import { createTouchControls } from './player/touch.js';
 import { createGallery } from './gallery/frames.js';
 import { createLightbox } from './gallery/lightbox.js';
+import { createCinema } from './gallery/cinema.js';
 import { createWelcome } from './ui/welcome.js';
 import { createNote } from './ui/note.js';
+import { createAmbience } from './audio/ambience.js';
 
-const REACH = 3.2; // distancia máxima para interactuar con un portarretratos o la cartita
+const REACH = 4; // distancia máxima para interactuar con algo dentro de la casa
+const REACH_OUTDOORS = 3.9; // los frutos de los árboles cuelgan más alto
 const coarsePointer = matchMedia('(pointer: coarse)').matches;
 const debug = import.meta.env.DEV ? new URLSearchParams(location.search) : new URLSearchParams();
 
@@ -32,22 +39,26 @@ const terrain = createTerrain();
 const house = createHouse();
 const river = createRiverscape();
 const garden = createGarden();
+const huerto = createHuerto();
+const trees = createTrees();
+const turkeys = createTurkeys();
+const cinema = createCinema(house.cinema, config.movie);
+const ambience = createAmbience();
 const sunflowers = createSunflowers({
   spacing: coarsePointer ? config.flowerSpacingMobile : config.flowerSpacing,
-  treeSpots: terrain.treeSpots,
+  treeSpots: trees.spots,
 });
-scene.add(terrain.group, house.group, river.group, garden.group, sunflowers.group);
+scene.add(terrain.group, trees.group, turkeys.group, cinema.group, house.group, river.group, garden.group, huerto.group, sunflowers.group);
 const sky = createSky(scene, {
   cycleSeconds: config.dayCycleSeconds,
   startPhase: debug.has('phase') ? Number(debug.get('phase')) : config.startPhase,
 });
 
 const player = createPlayer(camera, canvas, [
-  ...house.colliders, ...terrain.colliders, ...river.colliders, ...garden.colliders,
+  ...house.colliders, ...trees.colliders, ...river.colliders, ...garden.colliders, ...huerto.colliders,
 ]);
 const gallery = await createGallery(scene, {
   slots: house.frameSlots,
-  spareFrames: config.spareFrames,
   maxTextureSize: coarsePointer ? 768 : 1024,
   maxAnisotropy: renderer.capabilities.getMaxAnisotropy(),
 });
@@ -120,6 +131,13 @@ function read(open) {
 
 function activate(target) {
   if (target.letter) read(() => note.open());
+  else if (target.edible) toast(edibles.eat(target.hit));
+  else if (target.cinema) cinema.toggle();
+  else if (target.turkey) {
+    turkeys.startle(target.turkey);
+    gobble();
+    toast('¡Gordo-gordo-gordo!');
+  }
   else activateFrame(target.frame);
 }
 
@@ -150,18 +168,30 @@ ui.fileInput.addEventListener('change', async () => {
 // --- Apuntar a los cuadros ---------------------------------------------------------
 
 const raycaster = new THREE.Raycaster();
-raycaster.far = REACH;
 const pointer = new THREE.Vector2();
 
 house.letter.userData.letter = true;
 
-// Lo que hay bajo el punto de mira (o bajo el dedo): un portarretratos, la cartita o nada.
-function targetAt(ndcX, ndcY) {
-  // Solo desde dentro de la casita: así no se "toca" nada a través de la pared.
+const edibles = createEdibles();
+for (const [mesh, name] of [...trees.edible, ...huerto.edible]) edibles.add(mesh, name);
+for (const [mesh, name] of house.basketFruit) edibles.add(mesh, name, { indoor: true });
+
+// Lo que hay bajo el punto de mira (o bajo el dedo): portarretratos, cartita, algo de comer… o nada.
+// Dentro de la casa solo cuenta lo de dentro y fuera solo lo de fuera: nada se "toca" a través de la pared.
+function isIndoors() {
   const p = player.position;
-  if (Math.abs(p.x) > HOUSE.halfX - 1 || Math.abs(p.z) > HOUSE.halfZ) return null;
+  return Math.abs(p.x) < HOUSE.halfX - 1 && Math.abs(p.z) < HOUSE.halfZ;
+}
+
+function targetAt(ndcX, ndcY) {
+  const indoors = isIndoors();
+  raycaster.far = indoors ? REACH : REACH_OUTDOORS;
   raycaster.setFromCamera(pointer.set(ndcX, ndcY), camera);
-  return raycaster.intersectObjects([...gallery.targets, house.letter], false)[0]?.object.userData ?? null;
+  const objects = indoors
+    ? [...gallery.targets, house.letter, ...cinema.targets, ...edibles.targets('indoor')]
+    : [...edibles.targets('outdoor'), ...turkeys.targets];
+  const hit = raycaster.intersectObjects(objects, false)[0];
+  return hit ? { ...hit.object.userData, hit } : null;
 }
 
 // En las vistas de depuración también se puede hacer clic, para probar sin capturar el ratón.
@@ -189,6 +219,12 @@ function updateHover() {
     ? ''
     : target.letter
       ? 'Clic para leer la cartita'
+      : target.edible
+        ? `Clic para comer: ${target.edible}`
+      : target.cinema
+        ? cinema.playing ? 'Clic para apagar el proyector' : 'Clic para ver la película'
+      : target.turkey
+        ? 'Clic para saludar al guajolote'
       : target.frame.photo
         ? 'Clic para ver'
         : 'Clic para colocar una foto';
@@ -204,6 +240,7 @@ createWelcome(config.letter, ({ touch: isTouch }) => {
     : 'WASD para caminar · Ratón para mirar · Esc para pausar';
   setTimeout(() => ui.tips.classList.add('faded'), 9000);
   player.teleport(SPAWN.x, SPAWN.z);
+  ambience.start();
   resume();
 });
 
@@ -212,7 +249,6 @@ if (debug.has('view')) {
   const views = {
     field: [SPAWN.x, SPAWN.z, 0],
     river: [0.9, 23, -Math.PI / 2, -0.3],
-    fish: [1.2, 24, -Math.PI / 2, -0.75],
     garden: [0, 17.5, 0, -0.1],
     dining: [0.5, 5, 0.75, -0.25],
     table: [-2.6, 3.9, 0.25, -0.45],
@@ -222,6 +258,16 @@ if (debug.has('view')) {
     photo: [-5.4, 3.4, Math.PI / 2, -0.14],
     letter: [-2.75, 3.45, 0, -0.38],
     out: [0, 5, Math.PI],
+    cinema: [6.6, -1.2, Math.PI / 2, 0.12],
+    librero: [6.2, 3.2, 1.35, 0],
+    turkeys: [11.5, 2, -Math.PI / 2, -0.12],
+    huerto: [0, -8.2, 0, -0.32],
+    backdoor: [0, -3, 0, -0.05],
+    papaya: [-10.6, -12.5, 1.1, 0.45],
+    fig: [11.5, 14.5, -2.2, 0.15],
+    basket: [-4.6, 3.5, 0.05, -0.15],
+    melon: [2.95, -14.3, 0, -0.67],
+    tomato: [3.2, -10.6, 0.15, -0.62],
   };
   document.getElementById('welcome').hidden = true;
   player.teleport(...(views[debug.get('view')] ?? views.field));
@@ -254,6 +300,10 @@ renderer.setAnimationLoop(() => {
 
   sky.update(dt, time, camera);
   sunflowers.update(time, sky.sunYaw);
-  river.update(dt, time);
+  river.update(time);
+  edibles.update(time);
+  turkeys.update(dt, time, state === 'welcome' ? camera.position : player.position);
+  cinema.update(dt);
+  ambience.update(dt, { indoors: state !== 'welcome' && isIndoors(), ducked: cinema.playing && cinema.hasSound });
   renderer.render(scene, camera);
 });

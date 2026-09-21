@@ -9,7 +9,7 @@ const STONE = 1; // altura del zócalo de piedra de los muros exteriores
 const HEADROOM = 1.8; // una pieza que empieza por encima no estorba al jugador
 
 // Planta (interior de -8…8 en X y -6…6 en Z, puerta en +Z):
-//   · comedor delante a la izquierda, cocina al fondo a la izquierda,
+//   · comedor delante a la izquierda, cocina al fondo a la izquierda, puerta trasera en el centro del fondo,
 //   · dormitorio a la derecha, tras un tabique en x = 2…3 con su hueco de paso.
 const PARTITION = { x0: 2, x1: 3, door: [1, 3] };
 
@@ -62,6 +62,7 @@ export function createHouse() {
   add([-HX + 0.5, -0.2, -HZ + 0.5], [HX - 0.5, 0.02, HZ - 0.5], mat.planks);
   add([-HX + 1, 0, -HZ + 1], [-1, 0.035, -2], mat.tile); // baldosas de la cocina
   add([-DOOR - 0.5, -0.3, HZ - 0.5], [DOOR + 0.5, 0.04, HZ + 1], mat.cobble);
+  add([-DOOR - 0.5, -0.3, -HZ - 1], [DOOR + 0.5, 0.04, -HZ + 0.5], mat.cobble);
 
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
@@ -71,7 +72,8 @@ export function createHouse() {
     }
   }
 
-  wallRun('x', -HZ, -HZ + 1, -HX + 1, HX - 1, [windowAt(-7, -5, 2, 3)]); // fondo: ventana sobre el fregadero
+  // Fondo: ventana sobre el fregadero y la puerta trasera, que da al huerto.
+  wallRun('x', -HZ, -HZ + 1, -HX + 1, HX - 1, [windowAt(-7, -5, 2, 3), doorway(-DOOR, DOOR)]);
   wallRun('x', HZ - 1, HZ, -HX + 1, HX - 1, [windowAt(-6, -4), doorway(-DOOR, DOOR), windowAt(4, 6)]);
   wallRun('z', -HX, -HX + 1, -HZ + 1, HZ - 1, [windowAt(1, 3)]);
   wallRun('z', HX - 1, HX, -HZ + 1, HZ - 1, [windowAt(-1, 1)]);
@@ -94,5 +96,9 @@ export function createHouse() {
 
   const group = new THREE.Group();
   group.add(mergeStatic(pieces), furniture.extras);
-  return { group, colliders, frameSlots: furniture.frameSlots, letter: furniture.letter };
+  return {
+    group, colliders,
+    frameSlots: furniture.frameSlots, letter: furniture.letter, basketFruit: furniture.basketFruit,
+    cinema: furniture.cinema,
+  };
 }

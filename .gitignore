@@ -3,3 +3,9 @@ dist/
 *.log
 .DS_Store
 .vite/
+
+# Las fotos y los videos son personales: no se suben al repositorio (solo las carpetas vacías).
+photos/*
+!photos/.gitkeep
+videos/*
+!videos/.gitkeep

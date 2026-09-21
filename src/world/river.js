@@ -1,4 +1,4 @@
-import { HILLS_HALF } from './layout.js';
+import { HILLS_HALF, WORLD_HALF } from './layout.js';
 
 // El río cruza el mundo de oeste a este entre el punto de partida y la casita, serpenteando.
 // En los extremos tuerce hacia +Z para perderse tras las colinas en vez de acabar a la vista.
@@ -7,7 +7,7 @@ export const RIVER_BED = -1; // altura del lecho
 export const WATER_LEVEL = -0.2;
 export const BRIDGE = { halfWidth: 1.5, top: 0.08 };
 
-const bendFrom = 44;
+const bendFrom = WORLD_HALF - 4;
 
 export function riverZ(x) {
   const over = Math.max(0, Math.abs(x) - bendFrom);
@@ -22,13 +22,6 @@ function riverSlope(x) {
 // Distancia (aproximada) al eje del río, medida en perpendicular a la corriente.
 export function riverDistance(x, z) {
   return Math.abs(z - riverZ(x)) / Math.hypot(1, riverSlope(x));
-}
-
-// Dirección de la corriente en x, como vector unitario (dx, dz).
-export function riverFlow(x) {
-  const slope = riverSlope(x);
-  const len = Math.hypot(1, slope);
-  return [1 / len, slope / len];
 }
 
 export const isRiverCell = (ix, iz) => riverDistance(ix + 0.5, iz + 0.5) < RIVER_HALF;

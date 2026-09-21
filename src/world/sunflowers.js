@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../util/random.js';
 import { getTextures } from './textures.js';
-import { HOUSE, PATH, GARDEN } from './layout.js';
+import { HOUSE, PATH, GARDEN, HUERTO, TURKEY_YARD, WORLD_HALF } from './layout.js';
 import { RIVER_HALF, riverDistance } from './river.js';
 
-const FIELD_HALF = 47;
+const FIELD_HALF = WORLD_HALF - 1;
 
 // Inyecta en un material Lambert el giro de la cabeza hacia el sol (uYaw) y el vaivén
 // del viento. El vaivén depende solo de la posición XZ de la instancia, así tallo,
@@ -72,6 +72,9 @@ function isClear(x, z, treeSpots) {
   if (Math.abs(x) < HOUSE.halfX + 2.5 && Math.abs(z) < HOUSE.halfZ + 2.5) return false;
   if (Math.abs(x) < PATH.halfWidth + 0.7 && z > 0 && z < PATH.zEnd + 1.5) return false;
   if (Math.abs(x) < GARDEN.halfX + 0.8 && z > 0 && z < GARDEN.zEnd + 0.8) return false;
+  if (Math.abs(x) < HUERTO.halfX + 0.8 && z < 0 && z > HUERTO.zFar - 0.8) return false;
+  if (Math.abs(x) < PATH.halfWidth + 0.7 && z < 0 && z > HUERTO.zFar - 2.5) return false;
+  if (Math.hypot(x - TURKEY_YARD.x, z - TURKEY_YARD.z) < TURKEY_YARD.radius + 1) return false;
   if (riverDistance(x, z) < RIVER_HALF + 0.9) return false;
   return !treeSpots.some((t) => Math.hypot(t.x - x, t.z - z) < 1.2);
 }

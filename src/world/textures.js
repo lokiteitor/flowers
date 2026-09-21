@@ -280,6 +280,63 @@ export const FLOWER_KINDS = {
   lavender: ['spike', [140, 110, 220], [186, 160, 245]],
 };
 
+// Matas del huerto, con el mismo formato que las flores (dibujo 16×16 sobre planos cruzados).
+function bushSprite(leaf, top, blossom) {
+  return (put, rng) => {
+    for (let y = top; y < 16; y++) {
+      const t = (y - top) / (15 - top);
+      const half = 1.5 + 5.5 * Math.sin(Math.min(1, t * 1.25) * Math.PI * 0.62);
+      for (let x = 0; x < 16; x++) {
+        if (Math.abs(x - 7.5) > half || rng() < 0.12) continue;
+        put(x, y, blossom && rng() < 0.05 ? blossom : jitter(leaf, rng, 0.4));
+      }
+    }
+  };
+}
+
+function chardSprite(put, rng) {
+  for (const [sx, topY, stalk] of [[3, 6, [226, 60, 80]], [7, 3, [245, 240, 230]], [11, 5, [240, 190, 60]]]) {
+    for (let y = topY + 3; y < 16; y++) put(sx + (y > 12 ? Math.sign(7 - sx) : 0), y, stalk);
+    for (let y = topY; y < topY + 7; y++)
+      for (let x = sx - 3; x <= sx + 3; x++) {
+        if (Math.hypot((x - sx) / 3.2, (y - topY - 3) / 3.8) > 1) continue;
+        put(x, y, x === sx ? shade(stalk, 0.9) : jitter([36, 110, 50], rng, 0.35));
+      }
+  }
+}
+
+function papayaLeaf(put, rng, size) {
+  // Hoja palmeada: lóbulos que irradian desde el centro, con el pecíolo hacia la base (abajo).
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const dx = x - 7.5, dy = y - 6;
+      const reach = 6.8 * (0.45 + 0.55 * Math.abs(Math.cos(Math.atan2(dy, dx) * 3.5)));
+      if (Math.hypot(dx, dy) < reach) put(x, y, jitter([52, 132, 48], rng, 0.3));
+      else if (Math.abs(dx) < 1 && y > 6) put(x, y, [120, 150, 70]);
+    }
+}
+
+function melonSkin(put, rng, size) {
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) put(x, y, jitter(x % 4 === 0 ? [54, 110, 40] : [120, 176, 60], rng, 0.12));
+}
+
+function wicker(put, rng, size) {
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const over = ((x >> 1) + (y >> 1)) % 2 === 0;
+      put(x, y, jitter(over ? [196, 150, 84] : [150, 106, 54], rng, 0.12));
+    }
+}
+
+const PLANT_SPRITES = {
+  tomatoBush: bushSprite([50, 120, 44], 1, [250, 220, 60]),
+  chileBush: bushSprite([44, 110, 50], 5, [245, 245, 245]),
+  squashBush: bushSprite([60, 134, 50], 7, [250, 200, 40]),
+  melonVine: bushSprite([70, 140, 56], 10, null),
+  chard: chardSprite,
+};
+
 let cache;
 
 export function getTextures() {
@@ -331,12 +388,31 @@ export function getTextures() {
         for (let x = 0; x < s; x++) put(x, y, jitter(y === 2 || y === 5 ? [70, 120, 200] : [240, 242, 246], rng, 0.05));
     }),
     envelope: makeTexture(16, 46, envelope),
-    flowers: Object.fromEntries(
-      Object.entries(FLOWER_KINDS).map(([name, [shape, petal, heart]], i) => [
+    // Todo lo que se planta con planos cruzados: flores de jardín y matas del huerto.
+    flowers: Object.fromEntries([
+      ...Object.entries(FLOWER_KINDS).map(([name, [shape, petal, heart]], i) => [
         name,
         makeTexture(16, 60 + i, flowerSprite(shape, petal, heart ?? petal)),
       ]),
-    ),
+      ...Object.entries(PLANT_SPRITES).map(([name, draw], i) => [name, makeTexture(16, 80 + i, draw)]),
+    ]),
+    figLeaves: makeTexture(16, 47, (put, rng, s) => fillNoise(put, rng, s, [74, 142, 52], 0.4)),
+    papayaTrunk: makeTexture(16, 48, (put, rng, s) => {
+      for (let y = 0; y < s; y++)
+        for (let x = 0; x < s; x++) put(x, y, jitter(y % 5 === 0 && x % 3 ? [120, 108, 86] : [168, 156, 128], rng, 0.1));
+    }),
+    papayaLeaf: makeTexture(16, 49, papayaLeaf),
+    fig: makeTexture(8, 50, (put, rng, s) => fillNoise(put, rng, s, [104, 52, 120], 0.2)),
+    papaya: makeTexture(8, 51, (put, rng, s) => {
+      for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) put(x, y, jitter(y < 3 ? [150, 170, 60] : [244, 156, 40], rng, 0.1));
+    }),
+    tomato: makeTexture(8, 52, (put, rng, s) => fillNoise(put, rng, s, [222, 44, 36], 0.12)),
+    chile: makeTexture(8, 53, (put, rng, s) => fillNoise(put, rng, s, [235, 235, 235], 0.1)), // se tiñe por instancia
+    melon: makeTexture(16, 54, melonSkin),
+    zucchini: makeTexture(8, 55, (put, rng, s) => {
+      for (let y = 0; y < s; y++) for (let x = 0; x < s; x++) put(x, y, jitter(rng() < 0.15 ? [130, 170, 80] : [44, 96, 40], rng, 0.12));
+    }),
+    wicker: makeTexture(16, 56, wicker),
     sun: makeTexture(8, 29, celestial([255, 246, 190], [255, 224, 120], false)),
     moon: makeTexture(8, 30, celestial([226, 232, 246], [196, 204, 226], true)),
   };

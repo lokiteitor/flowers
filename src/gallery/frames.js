@@ -8,7 +8,7 @@ const presetFiles = import.meta.glob('/photos/*.{jpg,jpeg,png,webp,avif,gif,JPG,
   query: '?url',
   import: 'default',
 });
-const presetUrls = Object.keys(presetFiles)
+export const presetUrls = Object.keys(presetFiles)
   .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
   .map((key) => presetFiles[key]);
 
@@ -16,11 +16,10 @@ const BORDER = 0.06; // ancho del marco alrededor de la foto
 const MAX_SIDE = 0.8; // lado mayor de la foto, en bloques
 const EMPTY_SIDE = 0.6;
 const TILT = -0.2; // los portarretratos se recuestan un poco hacia atrás
-const MIN_FRAMES = 6;
 const FRAME_STYLES = [{ wood: true }, { color: 0xf2ead8 }, { color: 0xd9a441 }];
 
 // `slots` son los sitios sobre las mesitas de la casa: { x, y, z, facing }.
-export async function createGallery(scene, { slots, spareFrames, maxTextureSize, maxAnisotropy }) {
+export async function createGallery(scene, { slots, maxTextureSize, maxAnisotropy }) {
   const tex = getTextures();
   const root = new THREE.Group();
   scene.add(root);
@@ -116,9 +115,8 @@ export async function createGallery(scene, { slots, spareFrames, maxTextureSize,
     });
     root.clear();
     hovered = null;
-    // Solo se sacan los portarretratos necesarios: los de las fotos y unos pocos vacíos.
-    const wanted = Math.max(MIN_FRAMES, presets.length + uploads.length + spareFrames);
-    const shown = slots.slice(0, wanted);
+    // Todas las mesitas llevan sus portarretratos; los que no tienen foto muestran el «+».
+    const shown = slots;
     if (presets.length > shown.length) {
       console.warn(`Hay ${presets.length} fotos y solo caben ${shown.length}; las últimas no se muestran.`);
     }

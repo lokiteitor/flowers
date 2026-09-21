@@ -1,14 +1,9 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { mulberry32 } from '../util/random.js';
 import { getTextures } from './textures.js';
 import { tiledBox, footprint } from './blocks.js';
-import { HILLS_HALF } from './layout.js';
-import { BRIDGE, RIVER_HALF, RIVER_BED, WATER_LEVEL, bridgeSpan, isRiverCell, riverFlow, riverZ } from './river.js';
-
-const FISH_COUNT = 34;
-const FISH_RANGE = 52; // nadan entre -52 y 52 en X y reaparecen por el otro lado
-const FISH_COLORS = [0xff7a1a, 0xffffff, 0xffc21a, 0xff4a2a, 0xffa07a]; // tonos de koi: resaltan bajo el agua
+import { HILLS_HALF, WORLD_HALF } from './layout.js';
+import { BRIDGE, RIVER_HALF, RIVER_BED, WATER_LEVEL, bridgeSpan, isRiverCell, riverZ } from './river.js';
 
 // Lámina de agua: un cuadrado por celda de río, con la textura deslizándose río abajo.
 function buildWater(tex) {
@@ -37,8 +32,8 @@ function buildWater(tex) {
 function buildLilypads(tex, rng) {
   const spots = [];
   let attempts = 0;
-  while (spots.length < 16 && attempts++ < 200) {
-    const x = (rng() * 2 - 1) * 46;
+  while (spots.length < 20 && attempts++ < 200) {
+    const x = (rng() * 2 - 1) * (WORLD_HALF - 2);
     if (Math.abs(x) < BRIDGE.halfWidth + 1) continue;
     // Pegados a una orilla, donde el agua "corre" menos.
     const side = rng() < 0.5 ? -1 : 1;
@@ -54,83 +49,6 @@ function buildLilypads(tex, rng) {
     mesh.setMatrixAt(i, m);
   });
   return mesh;
-}
-
-// Pez de bloques mirando a +X: cuerpo, cola y una aleta dorsal.
-function fishGeometry() {
-  const body = new THREE.BoxGeometry(0.46, 0.2, 0.12);
-  const tail = new THREE.BoxGeometry(0.14, 0.24, 0.05);
-  tail.translate(-0.3, 0, 0);
-  const fin = new THREE.BoxGeometry(0.16, 0.08, 0.04);
-  fin.translate(0.02, 0.14, 0);
-  return mergeGeometries([body, tail, fin]);
-}
-
-function buildFish(rng) {
-  // Vistos a través del agua los peces quedaban lavados. Se pintan después de ella (material
-  // translúcido + renderOrder) y sin sombreado, como si nadaran justo bajo la superficie.
-  const material = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.8 });
-  const mesh = new THREE.InstancedMesh(fishGeometry(), material, FISH_COUNT);
-  mesh.renderOrder = 1;
-  mesh.frustumCulled = false;
-  const color = new THREE.Color();
-  const school = [];
-  for (let i = 0; i < FISH_COUNT; i++) {
-    school.push({
-      x: (rng() * 2 - 1) * FISH_RANGE,
-      lane: (rng() * 2 - 1) * (RIVER_HALF - 0.8), // desvío lateral respecto al eje del río
-      depth: -0.3 - rng() * 0.22, // cerca de la superficie, para que se vean bien desde la orilla
-      speed: (0.7 + rng() * 1.1) * (rng() < 0.3 ? -1 : 1), // la mayoría nada río abajo
-      size: 1 + rng() * 0.6,
-      wiggle: rng() * 10,
-      nextJump: 4 + rng() * 40,
-      jump: -1, // segundos desde que saltó; -1 = nadando
-    });
-    mesh.setColorAt(i, color.setHex(FISH_COLORS[i % FISH_COLORS.length]));
-  }
-
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  const euler = new THREE.Euler(0, 0, 0, 'YZX');
-  const pos = new THREE.Vector3();
-  const scl = new THREE.Vector3();
-  const JUMP_TIME = 0.9;
-
-  function update(dt, time) {
-    school.forEach((fish, i) => {
-      fish.x += fish.speed * dt;
-      if (fish.x > FISH_RANGE) fish.x = -FISH_RANGE;
-      if (fish.x < -FISH_RANGE) fish.x = FISH_RANGE;
-
-      // De vez en cuando, un salto fuera del agua.
-      fish.nextJump -= dt;
-      if (fish.nextJump < 0 && fish.jump < 0) {
-        fish.jump = 0;
-        fish.nextJump = 12 + Math.random() * 40;
-      }
-      let y = fish.depth;
-      let pitch = 0;
-      if (fish.jump >= 0) {
-        fish.jump += dt;
-        const t = fish.jump / JUMP_TIME;
-        if (t >= 1) fish.jump = -1;
-        else {
-          y = fish.depth + Math.sin(t * Math.PI) * (0.9 - fish.depth);
-          pitch = Math.cos(t * Math.PI) * 0.9;
-        }
-      }
-
-      const [fx, fz] = riverFlow(fish.x);
-      const heading = Math.atan2(-fz, fx) + (fish.speed < 0 ? Math.PI : 0);
-      const swish = Math.sin(time * 9 + fish.wiggle) * 0.28;
-      euler.set(0, heading + swish, pitch);
-      pos.set(fish.x, y, riverZ(fish.x) + fish.lane + Math.sin(time * 0.6 + fish.wiggle) * 0.3);
-      mesh.setMatrixAt(i, m.compose(pos, q.setFromEuler(euler), scl.setScalar(fish.size)));
-    });
-    mesh.instanceMatrix.needsUpdate = true;
-  }
-
-  return { mesh, update };
 }
 
 // Puente de tablones sobre el camino, con barandillas.
@@ -159,18 +77,16 @@ export function createRiverscape() {
   const tex = getTextures();
   const rng = mulberry32(404);
   const water = buildWater(tex);
-  const fish = buildFish(rng);
   const bridge = buildBridge(tex);
 
   const group = new THREE.Group();
-  group.add(fish.mesh, buildLilypads(tex, rng), bridge.group, water.mesh);
+  group.add(buildLilypads(tex, rng), bridge.group, water.mesh);
 
   return {
     group,
     colliders: bridge.colliders,
-    update(dt, time) {
+    update(time) {
       water.map.offset.x = -time * 0.35; // la corriente va hacia +X
-      fish.update(dt, time);
     },
   };
 }

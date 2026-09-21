@@ -7,6 +7,9 @@ import { roofUnderside } from './layout.js';
 
 const SIDE_TABLE = 0.8; // altura de las mesitas de los portarretratos
 const DINING = { x0: -5.5, x1: -1.5, z0: 0.5, z1: 2.5, top: 0.95 };
+// Cine del dormitorio: pantalla 16:9 en el tabique (mirando a +X) y proyector sobre el armario.
+const SCREEN = { x: 3.06, y: 2.4, z: -2.3, width: 4.8, height: 2.7 };
+const BOOK_COLORS = [0xb03a3a, 0x2f5fa8, 0x3c8a4a, 0xd9a441, 0x7a4aa0, 0xd97a3a, 0x2f8a8a, 0xe8e0cc];
 
 // Amuebla la casita: añade las piezas a `pieces` (que luego se funden por material) y sus
 // colisionadores a `colliders`. Devuelve lo que no se puede fundir (luces, flores, la cartita)
@@ -28,6 +31,10 @@ export function furnish(pieces, colliders) {
     white: lambert(tex.woolWhite),
     ceramic: lambert(tex.ceramic),
     mango: lambert(tex.mango),
+    wicker: lambert(tex.wicker),
+    fig: lambert(tex.fig),
+    papaya: lambert(tex.papaya),
+    tomato: lambert(tex.tomato),
     rug: lambert(tex.rug),
     paper: new THREE.MeshLambertMaterial({ color: 0xf6ecd2 }),
     envelope: lambert(tex.envelope),
@@ -94,6 +101,36 @@ export function furnish(pieces, colliders) {
     const light = new THREE.PointLight(0xffc37a, intensity, 16, 1.8);
     light.position.set(x, 2.7, z);
     extras.add(light);
+    return light;
+  }
+
+  // Librero contra una pared que mira a +X: armazón, baldas y libros de lomos de colores.
+  function bookshelf(x0, z0, z1, height) {
+    const depth = 0.7;
+    add([x0, 0, z0], [x0 + 0.06, height, z1], mat.wood); // trasera
+    add([x0, 0, z0], [x0 + depth, height, z0 + 0.1], mat.wood);
+    add([x0, 0, z1 - 0.1], [x0 + depth, height, z1], mat.wood);
+    const bookMaterials = BOOK_COLORS.map((color) => new THREE.MeshLambertMaterial({ color }));
+    const shelves = Math.floor(height / 0.62);
+    for (let i = 0; i <= shelves; i++) {
+      const y = Math.min(i * 0.62, height - 0.08);
+      add([x0, y, z0], [x0 + depth, y + 0.08, z1], mat.wood);
+      if (i === shelves) break;
+      // Libros de pie, con algún hueco y alguno recostado contra los demás.
+      let z = z0 + 0.14;
+      while (z < z1 - 0.3) {
+        const thick = 0.07 + rng() * 0.09;
+        const tall = 0.32 + rng() * 0.16;
+        if (rng() < 0.12) {
+          z += 0.18; // hueco
+          continue;
+        }
+        const book = tiledBox([x0 + 0.12, y + 0.08, z], [x0 + 0.12 + 0.36 + rng() * 0.12, y + 0.08 + tall, z + thick], bookMaterials[Math.floor(rng() * bookMaterials.length)]);
+        pieces.add(book);
+        z += thick + 0.012;
+      }
+    }
+    solid(x0, z0, x0 + depth, z1);
   }
 
   // --- Comedor ---------------------------------------------------------------------
@@ -121,6 +158,28 @@ export function furnish(pieces, colliders) {
     });
   });
   extras.add(plantFlowers(bouquet));
+
+  // …una canasta de frutas al otro lado, que se pueden comer una a una…
+  const bx = -4.7;
+  const bz = 1.5;
+  const top = DINING.top;
+  add([bx - 0.4, top, bz - 0.28], [bx + 0.4, top + 0.2, bz + 0.28], mat.wicker);
+  for (const side of [-1, 1]) add([bx + side * 0.37 - 0.03, top + 0.2, bz - 0.03], [bx + side * 0.37 + 0.03, top + 0.62, bz + 0.03], mat.wicker);
+  add([bx - 0.4, top + 0.58, bz - 0.03], [bx + 0.4, top + 0.64, bz + 0.03], mat.wicker); // asa
+  const basketFruit = [
+    ['mango', mat.mango, [0.24, 0.2, 0.32], [-0.2, 0.1], 0.5],
+    ['mango', mat.mango, [0.24, 0.2, 0.32], [0.18, -0.12], 2.1],
+    ['papaya', mat.papaya, [0.22, 0.2, 0.4], [0.02, 0.12], 1.4],
+    ['higo', mat.fig, [0.16, 0.18, 0.16], [-0.04, -0.14], 0.3],
+    ['higo', mat.fig, [0.16, 0.18, 0.16], [0.26, 0.13], 1],
+    ['tomate', mat.tomato, [0.17, 0.15, 0.17], [-0.26, -0.13], 0.8],
+  ].map(([name, material, size, [dx, dz], turn]) => {
+    const fruit = new THREE.Mesh(new THREE.BoxGeometry(...size), material);
+    fruit.position.set(bx + dx, top + 0.2 + size[1] / 2, bz + dz);
+    fruit.rotation.y = turn;
+    extras.add(fruit);
+    return [fruit, name];
+  });
 
   // …y la cartita a su lado. Es interactiva, así que queda fuera del fundido de mallas.
   const blank = mat.paper;
@@ -174,7 +233,17 @@ export function furnish(pieces, colliders) {
   add([7, 0, -4.4], [8, 3, -2.4], mat.cabinet); // armario
   solid(7, -4.4, 8, -2.4);
   rugAt(5.5, -0.5, 3.4, 2.4);
-  lantern(5.5, 0.5, 16);
+  const bedroomLight = lantern(5.5, 0.5, 16);
+  bookshelf(3, 3.15, 5.0, 3.2);
+
+  // Pantalla de cine (el marco; la imagen la pone gallery/cinema.js) y proyector sobre el armario.
+  const { x: sx, y: sy, z: sz, width: sw, height: sh } = SCREEN;
+  add([sx - 0.06, sy - sh / 2 - 0.1, sz - sw / 2 - 0.1], [sx - 0.02, sy + sh / 2 + 0.1, sz + sw / 2 + 0.1], mat.metal);
+  const projector = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.22, 0.42), mat.metal);
+  projector.position.set(7.35, 3.11, -2.85);
+  extras.add(projector);
+  const lens = new THREE.Vector3(7.06, 3.12, -2.85);
+  add([lens.x - 0.06, lens.y - 0.07, lens.z - 0.07], [lens.x + 0.04, lens.y + 0.07, lens.z + 0.07], mat.lantern);
 
   // --- Mesitas de los portarretratos, en orden de recorrido --------------------------
   const before = frameSlots.splice(0); // las mesillas de noche van después de las del salón
@@ -183,7 +252,7 @@ export function furnish(pieces, colliders) {
   photoTable(1.1, -4, 2, 0, -Math.PI / 2); // contra el tabique
   frameSlots.push(...before);
   photoTable(7.1, 2, 8, 5, -Math.PI / 2); // dormitorio, pared derecha
-  photoTable(3, 5.1, 7, 6, Math.PI); // dormitorio, bajo la ventana
+  photoTable(4, 5.1, 7, 6, Math.PI); // dormitorio, bajo la ventana (el rincón es del librero)
 
-  return { extras, frameSlots, letter };
+  return { extras, frameSlots, letter, basketFruit, cinema: { screen: SCREEN, lens, projector, roomLight: bedroomLight } };
 }

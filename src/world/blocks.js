@@ -19,6 +19,15 @@ export function tiledBox(min, max, material) {
   return mesh;
 }
 
+// Muchos bloques iguales (colinas, troncos, copas) en una sola malla instanciada.
+export function instancedBlocks(positions, material, size = [1, 1, 1]) {
+  const mesh = new THREE.InstancedMesh(new THREE.BoxGeometry(...size), material, positions.length);
+  const m = new THREE.Matrix4();
+  positions.forEach(([x, y, z], i) => mesh.setMatrixAt(i, m.makeTranslation(x, y, z)));
+  mesh.instanceMatrix.needsUpdate = true;
+  return mesh;
+}
+
 // Colisionador en planta (XZ) a partir de las mismas esquinas.
 export const footprint = (min, max) => ({ minX: min[0], maxX: max[0], minZ: min[2], maxZ: max[2] });
 
