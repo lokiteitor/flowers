@@ -2,13 +2,14 @@
 export const config = {
   // Carta de bienvenida
   letter: {
-    title: 'Para ti, mi amor',
+    title: 'Para ti, mi vida.',
     paragraphs: [
       'Sembré este campo de girasoles para ti.',
       'En medio hay una casita con nuestros recuerdos. Camina hasta ella, entra y míralos con calma.',
       'Los marcos vacíos son para las fotos que aún nos faltan.',
+      'Vamos con el padre de una vez.',
     ],
-    signature: 'Con todo mi cariño',
+    signature: 'Te quiero bonita :D',
     button: 'Entrar',
   },
 
@@ -18,6 +19,7 @@ export const config = {
     paragraphs: [
       'Estas flores amarillas son para ti, como todas las de ahí fuera.',
       'Gracias por cada uno de los recuerdos que hay en esta casita. Quiero llenar contigo todos los marcos que quedan.',
+      'Quiero algun dia construir esta casita y cuidar juntos los guajolotes cuando se hagan realidad.'
     ],
     signature: 'Te quiero',
   },
