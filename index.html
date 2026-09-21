@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#f4b63a" />
+    <title>Un campo de girasoles para ti</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌻</text></svg>" />
+  </head>
+  <body>
+    <canvas id="scene"></canvas>
+
+    <div id="hud" hidden>
+      <div id="crosshair"></div>
+      <div id="hint"></div>
+      <div id="tips"></div>
+    </div>
+    <div id="stick-base"></div>
+    <div id="stick-knob"></div>
+
+    <div id="welcome" class="overlay">
+      <article class="letter">
+        <h1 id="letter-title"></h1>
+        <div id="letter-body"></div>
+        <p id="letter-signature"></p>
+        <button id="enter" class="pixel-button" type="button"></button>
+      </article>
+    </div>
+
+    <div id="pause" class="overlay" hidden>
+      <div class="panel">
+        <h2>En pausa</h2>
+        <p>WASD o flechas para caminar · Ratón para mirar</p>
+        <p>Espacio para saltar · Mayús para correr</p>
+        <p>Clic sobre un cuadro para verlo o colocar una foto</p>
+        <button id="resume" class="pixel-button" type="button">Continuar</button>
+      </div>
+    </div>
+
+    <div id="lightbox" class="overlay" hidden>
+      <img id="lightbox-image" alt="" />
+      <div class="lightbox-actions">
+        <button id="lightbox-remove" class="pixel-button danger" type="button">Quitar foto</button>
+        <button id="lightbox-close" class="pixel-button" type="button">Cerrar</button>
+      </div>
+    </div>
+
+    <div id="toast" hidden></div>
+    <input id="file-input" type="file" accept="image/*" hidden />
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
