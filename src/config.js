@@ -26,7 +26,7 @@ export const config = {
 
   // Cine del dormitorio. Pasa las fotos de photos/ como una película; si hay un video en
   // videos/ (mp4 o webm), proyecta ese en su lugar.
-  movie: { title: 'Nuestra película', secondsPerPhoto: 5 },
+  movie: { title: 'Nuestras pato aventuras', secondsPerPhoto: 5 },
 
   // Duración de un ciclo completo día → atardecer → noche → amanecer, en segundos.
   dayCycleSeconds: 900,

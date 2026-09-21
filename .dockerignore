@@ -1,0 +1,6 @@
+# Ojo: photos/ y videos/ NO se ignoran aquí (aunque sí en git): hacen falta para el build.
+node_modules
+dist
+.git
+.vite
+*.log

@@ -49,6 +49,20 @@ npm run build    # genera dist/
 cualquier subcarpeta (por ejemplo `rsync -av dist/ usuario@servidor:/var/www/girasoles/`).
 Tras añadir o cambiar fotos hay que volver a ejecutar el build.
 
+### Con Docker (lo más cómodo)
+
+```bash
+make start            # construye la imagen, levanta el contenedor y muestra la liga
+make start PORT=80    # lo mismo, en otro puerto (por defecto 8080)
+make restart          # tras cambiar fotos, video o código
+make stop             # lo apaga        ·  make help lista el resto
+```
+
+La imagen compila el juego dentro de Docker (no hace falta Node en el servidor) y lo sirve con
+Nginx. Las fotos y el video se empaquetan al construirla, así que `photos/` y `videos/` deben
+estar en la carpeta del proyecto en la máquina donde se ejecute `make start`. El contenedor se
+reinicia solo si el servidor se reinicia.
+
 ## Controles
 
 | | Ordenador | Móvil |
